@@ -1,8 +1,8 @@
-import consumer.consumer_interface as c
+from consumer_interface import mqConsumerInterface
 import pika # type: ignore
 import os
 
-class mqConsumer(c.mqConsumerInterface):
+class mqConsumer(mqConsumerInterface):
   def __init__(self, binding_key: str, exchange_name: str, queue_name: str) -> None:
     # Save parameters to class variables
         self.binding_key = binding_key
@@ -14,22 +14,23 @@ class mqConsumer(c.mqConsumerInterface):
 
   def setupRMQConnection(self) -> None:
     # Set-up Connection to RabbitMQ service
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    con_params = pika.URLParameters(os.environ["AMQP_URL"])
+    self.connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
     # Establish Channel
-    channel = connection.channel()
+    self.channel = self.connection.channel()
     # Create Queue if not already present
-    channel.queue_declare(queue='hello')
+    self.channel.queue_declare(queue=self.queue_name)
     # Create the exchange if not already present
-    exchange = channel.exchange_declare(exchange="Exchange Name")
+    exchange = channel.exchange_declare(exchange=self.exchange_name)
     # Bind Binding Key to Queue on the exchange
-    channel.queue_bind(
-    queue= "Queue Name",
-    routing_key= "Routing Key",
-    exchange="Exchange Name",
+    self.channel.queue_bind(
+    queue= self.queue_name,
+    routing_key= self.routing_key,
+    exchange= self.exchange_name,
     )
     # Set-up Callback function for receiving messages
-    channel.basic_consume(
-    "Queue Name", on_message_callback, auto_ack=False
+    self.channel.basic_consume(
+    self.queue_name, self.on_message_callback, auto_ack=False
     )
 
     def on_message_callback(
@@ -38,18 +39,18 @@ class mqConsumer(c.mqConsumerInterface):
         # Acknowledge message
         channel.basic_ack(method_frame.delivery_tag, False)
         #Print message (The message is contained in the body parameter variable)
-        print(body)
+        print(f" [x] Received Message: {body}")
     
     def startConsuming(self) -> None:
         # Print " [*] Waiting for messages. To exit press CTRL+C"
         print(" [*] Waiting for messages. To exit press CTRL+C")
         # Start consuming messages
-        channel.start_consuming()
+        self.channel.start_consuming()
     
     def __del__(self) -> None:
         # Print "Closing RMQ connection on destruction"
         print('Closing RMQ connection on destruction')
         # Close Channel
-        channel.close()
+        self.channel.close()
         # Close Connection
-        connection.close()
+        self.connection.close()
